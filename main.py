@@ -71,7 +71,7 @@ def train(n_layers, n_neurons, b, k, epochs1, epochs2, pre_model_bc=None):
     
     loss_obj = tf.keras.losses.MeanSquaredError()
     adam = tf.keras.optimizers.Adam(learning_rate=1e-3)
-    adam_2 = tf.keras.optimizers.Adam(learning_rate=1e-2)
+    adam_2 = tf.keras.optimizers.Adam(learning_rate=1e-5)
     
     model = HarmonicOscillator(n_layers, n_neurons, b, k)
 
