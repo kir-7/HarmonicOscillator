@@ -19,112 +19,55 @@ from collections import defaultdict
  
 
 class HarmonicOscillator(keras.Model):
-    def __init__(self, n_layers, n_neurons, k, b, lb, ub, *args, **kwargs):
+    def __init__(self, n_layers, n_neurons, b, k, *args, **kwargs):
 
-        super().__init__(**kwargs)   
+        super(HarmonicOscillator, self).__init__(**kwargs)   
 
         self.n_layers = n_layers
         self.n_neurons = n_neurons
 
-        self.k = k
-        self.b = b
-
-        self.lb = lb
-        self.ub = ub
-        self.hist = defaultdict(list)
-
-        self.counter = 0
-
-
-    def build_model(self, print_sum = False):
-        
-        initializer = GlorotNormal(seed=69)
-
-        model = tf.keras.Sequential()
-        model.add(tf.keras.layers.Input([1]))
-
-        for i in range(self.n_layers):
-            model.add(tf.keras.layers.Dense(self.n_neurons, activation='tanh', kernel_initializer=initializer))
-
-        model.add(tf.keras.layers.Dense(1,activation='linear', kernel_initializer=initializer))
-        
-        return model
-
-    def loss_BC(self, t, x):
-
-        loss_u = x - self.model(t)
-        loss_u = tf.reduce_mean(tf.square(loss_u))
-        
-        return loss_u
-
-    def loss_pde(self, t):
-
-
-        with tf.GradientTape(persistent=True) as tape:
-            
-            tape.watch(t)
-            tape.watch(self.model.trainable_variables)
-
-            z = self.model(t)
-
-            x_t = tape.gradient(z, t)  # x_t is x' that is dx/dt
-        
-        x_tt = tape.gradient(x_t, t)  # x_tt is d2x/dt2 that is x''
-
-        del tape
-        f = x_tt + (self.b * x_t) + (self.k*(self.model(t))) 
-
-        loss_pde = tf.reduce_mean(tf.square(f))
-
-        
-
-        return loss_pde
-
-
-    def calc_loss(self, t_u, t_c, x_u):
-        
-        loss_u = self.loss_BC(t_u, x_u)
-        loss_pde = self.loss_pde(t_c)
-
-        return loss_u+loss_pde, loss_u, loss_pde
-
-
-
-    def compile(self, optimizer, **kwargs):
-        super().compile(**kwargs)
-
-
-        self.model = self.build_model()
-
-        self.optimizer = optimizer
-
+        self.b, self.k = b, k
     
 
-    def train_step(self, data,):
+        self.hidden_layers = []
+        
+        for i in range(n_layers):
+            self.hidden_layers.append(Dense(n_neurons, activation='tanh', kernel_initializer=tf.keras.initializers.GlorotNormal()))
+        
+        self.output_layer = Dense(1, 'linear', kernel_initializer=tf.keras.initializers.GlorotNormal(), dtype=tf.float64)
 
-        self.counter += 1
 
-        data = data[0]
+    def call(self, t):
+        
+        x = t
+        
+        for i in range(self.n_layers):
+            x = self.hidden_layers[i](x)
+        
+        x = self.output_layer(x)
+
+        return x
+
+def PDE_LOSS(model, t):
+
+    with tf.GradientTape(persistent=True) as tape:
+
+        tape.watch(t)   
+
+        x = model(t)
+
+        x_t = tape.gradient(x, t)
+
+        x_tt = tape.gradient(x_t, t)
+    
+    f = x_tt + (model.b * x_t) + (model.k * x)
+
+    pde_loss = (1e-4) * (tf.reduce_mean(tf.square(f)))
+
+    return pde_loss
+
+
+
 
         
-        t_u, x_u, t_c= data[:, 0], data[:, 1], data[:, 2]
-        with tf.GradientTape(persistent=True) as tape:
-
-            tape.watch(self.model.trainable_variables)
-            loss,loss_bc, loss_pde = self.calc_loss(t_u, t_c, x_u)
-        
-        gradients = tape.gradient(loss, self.model.trainable_variables)
-        self.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
-
-        del tape
-        
-
-        self.current_loss = loss
-       
-        return {'metric_loss': loss, "pde_loss":loss_pde, 'bc_loss':loss_bc}
-
-    def predict(self, t):
-
-        return self.model(t)
-
 

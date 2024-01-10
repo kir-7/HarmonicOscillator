@@ -1,0 +1,2 @@
+model_checkpoint_path: "total_8X20X1000x5000epochs_200x5000(N_U x N_f)_(10, 200)(b, k)"
+all_model_checkpoint_paths: "total_8X20X1000x5000epochs_200x5000(N_U x N_f)_(10, 200)(b, k)"

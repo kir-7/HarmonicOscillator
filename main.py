@@ -3,29 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pickle
 
-from model import HarmonicOscillator
+from model import HarmonicOscillator, PDE_LOSS
 
-
-class Callback(tf.keras.callbacks.Callback):
-    def on_epoch_end(self, epoch, logs={}):
-
-        if epoch %100 == 0:
-            t = tf.linspace(0, 1, 1000)
-
-            x = oscillator(self.model.b, self.model.k, t)
-
-            t_u = t[0:1000:100]
-            x_u = oscillator(10, 200, t_u)
-            x_pred = self.model.predict(t_u)
-
-            plt.figure(figsize=(12, 6))
-            plt.plot(t, x, color="grey", linewidth=2, alpha=0.8, label="Exact solution")
-            plt.scatter(t_u, x_u, s=60, color="tab:orange", alpha=0.4, label='Training data')
-            plt.scatter(t_u, x_pred, color="tab:blue", linewidth=4, alpha=0.8, label="Neural network prediction")
-            plt.savefig(f"figures/at_{epoch}_end.png")
-    
+from collections import defaultdict
             
-
 
 def oscillator(b, k, t):
     
@@ -49,25 +30,6 @@ def oscillator(b, k, t):
 
     return y
 
-def plot_result(x, y, x_data, y_data, yh, count , xp=None):
-
-    "Pretty plot training results"
-
-    plt.figure(figsize=(12,6))
-    plt.plot(x,y, color="grey", linewidth=2, alpha=0.8, label="Exact solution")
-    plt.scatter(x_data, yh, color="tab:blue", linewidth=4, alpha=0.8, label="Neural network prediction")
-    plt.scatter(x_data, y_data, s=60, color="tab:orange", alpha=0.4, label='Training data')
-    if xp is not None:
-        plt.scatter(xp, -0*np.ones_like(xp), s=60, color="tab:green", alpha=0.4, 
-                    label='Physics loss training locations')
-    l = plt.legend(loc=(1.01,0.34), frameon=False, fontsize="large")
-    plt.setp(l.get_texts(), color="k")
-    plt.xlim(-0.05, 1.05)
-    plt.ylim(-1.1, 1.1)
-    plt.text(1.065,0.7,"Training step: %i"%(count+1),fontsize="xx-large",color="k")
-    plt.axis("off")
-    plt.show()
-
 
 def generate_data(N_u, N_f, b, k):
     '''
@@ -76,11 +38,12 @@ def generate_data(N_u, N_f, b, k):
     '''
     assert N_u <= 1000
     t = tf.linspace(0, 1, 1000)
-    t = tf.reshape(t, (-1, 1))
     x = oscillator(b, k, t)
 
-    t_u = t[0:1000:1000//N_u]
-    x_u = x[0:1000:1000//N_u]
+    t_u = t[0:1000:(1000//N_u)]
+    t_u = tf.reshape(t_u, (-1, 1))
+    x_u = x[0:1000:(1000//N_u)]
+    x_u = tf.reshape(x_u, (-1, 1))
 
     t_c = tf.linspace(0, 1, N_f)
     t_c = tf.reshape(t_c, (-1, 1))
@@ -90,46 +53,121 @@ def generate_data(N_u, N_f, b, k):
 
 
 
-def train(n_layers, n_neurons, b, k, optimizer1, epochs, batch_size, callback):
+def train(n_layers, n_neurons, b, k, epochs1, epochs2, pre_model_bc=None):
     '''
     A function to import the model, set the correct parameters and train.
     b = 2*d
     k = w**2
     '''
 
-    t_u, x_u, t_c = generate_data(1000, 1000, b, k)
-    # t_u.shape = (200, 1) 
-    # column stack the data generated and get the lb, ub
-    train_data_bc = tf.cast(tf.stack((t_u, x_u, t_c), axis=1), tf.float32)
+    t_org = np.linspace(0, 1, 1000)
+    x_org = oscillator(b, k, t_org)
+
+    t_u, x_u, t_c = generate_data(200, 5000, b, k)
+    # # t_u.shape = (1000, 1) 
+    # print(t_u.shape, x_u.shape, t_u[:10])
+
+    hist = defaultdict(list)
     
+    loss_obj = tf.keras.losses.MeanSquaredError()
+    adam = tf.keras.optimizers.Adam(learning_rate=1e-3)
+    adam_2 = tf.keras.optimizers.Adam(learning_rate=1e-2)
     
-    lb = tf.cast(tf.reduce_min(train_data_bc), tf.float32)
-    ub = tf.cast(tf.reduce_max(train_data_bc), tf.float32)
+    model = HarmonicOscillator(n_layers, n_neurons, b, k)
 
-    global model
+    if pre_model_bc == None:
 
-    model = HarmonicOscillator(n_layers, n_neurons, k, b, lb, ub)
+        for epoch in range(epochs1):
+            
+            with tf.GradientTape() as tape:
+                
+                x = model(t_u)
+                loss = loss_obj(x_u, x)
+
+            gradients = tape.gradient(loss, model.trainable_variables)
+            adam.apply_gradients(zip(gradients, model.trainable_variables))
+
+            if epoch%50 == 0 or epoch == epochs2 - 1:
+
+                print(f"BC_loss : {loss}")
+            
+            hist['loss_bc'].append(loss)
+
+            if epoch%200 == 0 or epoch == epochs1 - 1:
+
+                t_test = tf.reshape(tf.linspace(0, 1, 20), (-1, 1))
+                x_test = tf.reshape(oscillator(b,  k, t_test), (-1, 1))
+                x_pred = model(t_test)
+
+                plt.figure(figsize=(12, 6))
+                plt.plot(t_org, x_org,  color="grey", linewidth=2, alpha=0.8, label="Exact solution")
+                plt.scatter(t_test, x_test, s=60, color="tab:orange", alpha=0.4, label='Training data')
+                plt.scatter(t_test, x_pred, color="tab:blue", linewidth=4, alpha=0.8, label="Neural network prediction")
+                plt.savefig(f"figures/bc_train_epoch_{epoch}.png")
+        
+        model.save_weights(f"bc_{n_layers}X{n_neurons}X{epochs1}x{epochs2}epochs_200x5000(N_U x N_f)_(10, 200)(b, k).weights.h5")
     
-    model.compile(optimizer=optimizer1)
+    else:
+        model.load_weights(pre_model_bc)
+        print('model loaded!')
 
-    model.fit(train_data_bc, tf.zeros_like(train_data_bc), epochs=epochs, batch_size=batch_size, callbacks=callback)
+    for epoch in range(epochs2):
 
-    return
+        with tf.GradientTape() as tape:
+            x = model(t_u)
+            loss_bc =  loss_obj(x_u, x)
+            loss_pde = PDE_LOSS(model, t_c)
+            loss = loss_pde + loss_bc
+        
+        gradients = tape.gradient(loss, model.trainable_variables)
 
-def save_model():
-    '''
-    A func to save the model using pickle to later load it in.
-    '''
-    return
+        adam_2.apply_gradients(zip(gradients, model.trainable_variables))
 
-def predict(t):
-    print(model.predict(t))
+        if epoch%250 == 0 or epoch == epochs2 - 1:
+            print(f"PDE_LOSS : {loss_pde}")
+            print(f"BC Loss : {loss_bc}")
+            print(f"TOTAL LOSS : {loss}")
 
+        hist['pde_loss'].append(loss)
+
+        if epoch%1000 == 0 or epoch == epochs2 - 1:
+
+            t_test = tf.reshape(tf.linspace(0, 1, 20), (-1, 1))
+            x_test = tf.reshape(oscillator(b, k, t_test), (-1, 1))
+            x_pred = model(t_test)
+
+            plt.figure(figsize=(12, 6))
+            plt.plot(t_org, x_org,  color="grey", linewidth=2, alpha=0.8, label="Exact solution")
+            plt.scatter(t_test, x_test, s=60, color="tab:orange", alpha=0.4, label='Training data')
+            plt.scatter(t_test, x_pred, color="tab:blue", linewidth=4, alpha=0.8, label="Neural network prediction")
+            plt.savefig(f"figures/pde_train_epoch_{epoch}.png")
+            
+          
+        
+
+    model.save_weights(f"total_{n_layers}X{n_neurons}X{epochs1}x{epochs2}epochs_200x5000(N_U x N_f)_(10, 200)(b, k)")
+
+    return hist
 
 
 if __name__ == '__main__':
-    optimizer1 = tf.keras.optimizers.Adam()
-    callback = Callback()
-    train(8, 20, 10, 200, optimizer1, 300, 32, [callback])
+    # hist = train(8, 20, 5, 100, 1000, 5000)
+    # with open('histories/hist_1000x5000epoch.pkl', 'wb') as f:
+    #     pickle.dump(hist, f)
+    
+    with open('histories/hist_1000x5000epoch.pkl', 'rb') as f:
+        h = pickle.load(f)
+        print(h.keys())
+        plt.figure(figsize=(12, 6))
+        plt.plot(range(1000), h['loss_bc'], color='blue', linewidth=1)
+        plt.savefig(f"figures/hist_1000x5000epochs_bcLoss.png")
+        plt.figure(figsize=(12, 6))
+        plt.plot(range(5000), h['pde_loss'], color='red', linewidth=1)
+        plt.savefig(f"figures/hist_1000x5000epochs_TotalLoss.png")
 
+
+
+
+    
+    
 
