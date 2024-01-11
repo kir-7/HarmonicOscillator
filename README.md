@@ -1,25 +1,25 @@
 
-Inspired from benmosley : https://github.com/benmoseley
-PINNs paper: https://arxiv.org/abs/1711.10561
+Inspired from benmosley : https://github.com/benmoseley `<br>`
+PINNs paper: https://arxiv.org/abs/1711.10561 `<br>`
 
-An attempt to train a model to predict the location of bob attached to a spring of spring constant k and damping constant b
--- 't' is time and x is the location
--- N_f : Number of boundary condition points
--- N_c : Number of collocation points
-  t_c: time points for collocation
-  t_u,  x_u : boundary condition points
+An attempt to train a model to predict the location of bob attached to a spring of spring constant k and damping constant b `<br>`
+-- 't' is time and x is the location`<br>`
+-- N_f : Number of boundary condition points`<br>`
+-- N_c : Number of collocation points`<br>`
+  t_c: time points for collocation`<br>`
+  t_u,  x_u : boundary condition points`<br>`
 
-**Architechture :**:
-    - 8 Dense layers, 20 neurons each
-    - Xavier initialization (GlorotNormal)
+**Architechture :**:`<br>`
+    - 8 Dense layers, 20 neurons each`<br>`
+    - Xavier initialization (GlorotNormal)`<br>`
     
-**Training :**
-  optimizer: Adam (lr = 1e-3) for BC train
-             Adam (lr = 1e-5) for physics train
-  loss : MeanSquaredError -> for both
+**Training :**`<br>`
+  optimizer: Adam (lr = 1e-3) for BC train`<br>`
+             Adam (lr = 1e-5) for physics train`<br>`
+  loss : MeanSquaredError -> for both`<br>`
 
-  - 1000 epochs for Boundary training
-  - 5000 epochs for Physics training
+  - 1000 epochs for Boundary training`<br>`
+  - 5000 epochs for Physics training`<br>`
 
  **Plots :**
   - after BC train:
