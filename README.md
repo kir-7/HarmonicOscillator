@@ -1,8 +1,8 @@
 
-Inspired from benmosley : https://github.com/benmoseley `<br>`
-PINNs paper: https://arxiv.org/abs/1711.10561 `<br>`
+Inspired from benmosley : https://github.com/benmoseley <br />
+PINNs paper: https://arxiv.org/abs/1711.10561 <br />
 
-An attempt to train a model to predict the location of bob attached to a spring of spring constant k and damping constant b `<br>`
+An attempt to train a model to predict the location of bob attached to a spring of spring constant k and damping constant b <br />
 -- 't' is time and x is the location`<br>`
 -- N_f : Number of boundary condition points`<br>`
 -- N_c : Number of collocation points`<br>`
